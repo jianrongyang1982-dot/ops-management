@@ -1,0 +1,163 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #app { height: 100%; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif; }
+
+/* 登录页样式已移到 Login.vue 中 */
+
+.layout { height: 100vh; display: flex; }
+.sidebar {
+  width: 220px;
+  background: #1e3a5f;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.sidebar-logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  font-size: 17px;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+.sidebar-logo .el-icon { margin-right: 10px; font-size: 22px; }
+.sidebar-menu { flex: 1; padding: 10px 0; }
+.sidebar-menu .el-menu { border: none; background: transparent; }
+.sidebar-menu .el-menu-item { color: #c8d6e5; }
+.sidebar-menu .el-menu-item.is-active { background: rgba(255,255,255,.12) !important; color: #fff; }
+.sidebar-menu .el-sub-menu__title { color: #c8d6e5; }
+.sidebar-menu .el-sub-menu__title:hover { background: rgba(255,255,255,.08) !important; }
+.sidebar-menu .el-sub-menu .el-menu-item { min-width: 0; padding-left: 46px !important; color: #aebecd; }
+.sidebar-menu .el-sub-menu .el-menu-item.is-active { background: rgba(255,255,255,.12) !important; color: #fff; }
+.sidebar-user {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,.1);
+  font-size: 13px;
+  color: #c8d6e5;
+}
+.main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.header {
+  height: 64px;
+  background: #fff;
+  border-bottom: 1px solid #e4e7ed;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  flex-shrink: 0;
+}
+.header-title { font-size: 18px; font-weight: 600; color: #303133; }
+.content { flex: 1; padding: 20px 24px; overflow: auto; background: #f5f7fa; }
+
+/* 列表页：flex 布局让表格撑满、分页固定底端 */
+.list-page { height: 100%; }
+.list-page-card { background: #fff; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; flex-shrink: 0; }
+.toolbar .el-select { width: 160px; }
+.toolbar .el-input { width: 180px; }
+.table-flex { flex: 1; min-height: 0; overflow: hidden; }
+.pagination { display: flex; justify-content: flex-end; margin-top: 16px; flex-shrink: 0; }
+
+/* 列设置弹窗 */
+.col-setting-tip { font-size: 12px; color: #909399; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #ebeef5; }
+.col-setting-item { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 4px; }
+.col-setting-item:hover { background: #f5f7fa; }
+.col-drag-handle { cursor: move; color: #c0c4cc; font-size: 16px; flex-shrink: 0; }
+.col-drag-handle:hover { color: #409eff; }
+.col-setting-footer { margin-top: 10px; padding-top: 8px; border-top: 1px solid #ebeef5; text-align: right; }
+
+/* 卡片视图（单列，容纳两组链路条） */
+.card-flex { flex: 1; min-height: 0; overflow: auto; }
+.card-grid { display: flex; flex-direction: column; gap: 14px; padding-right: 4px; }
+.card-empty { text-align: center; color: #909399; padding: 40px; }
+.track-card { background: #fff; border: 1px solid #e4e7ed; border-radius: 8px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.04); }
+.track-card:hover { border-color: #409eff; box-shadow: 0 2px 10px rgba(64,158,255,.12); }
+.card-head { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #ebeef5; gap: 10px; }
+.card-head-left { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; min-width: 0; }
+.card-seq { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 6px; background: #1e3a5f; color: #fff; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.card-brand { font-weight: 600; color: #303133; background: #ecf5ff; color: #409eff; padding: 2px 8px; border-radius: 4px; font-size: 12px; flex-shrink: 0; }
+.card-bl { font-family: monospace; font-weight: 600; color: #1e3a5f; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-track-link, .table-track-link { display: inline-flex; align-items: center; gap: 3px; color: #409eff; font-size: 12px; text-decoration: none; flex-shrink: 0; }
+.card-track-link:hover, .table-track-link:hover { color: #66b1ff; text-decoration: underline; }
+/* 卡片头：飞驼轨迹后的商品/非商品标签与时长（时长字体加大醒目） */
+.head-goods { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 4px; background: #f4f4f5; color: #606266; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.head-goods.product { background: #f0f9eb; color: #67c23a; }
+.head-goods.non-product { background: #fdf6ec; color: #e6a23c; }
+.head-duration { display: inline-flex; align-items: center; gap: 4px; color: #909399; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+.head-duration b { font-size: 16px; font-weight: 700; color: #e6a23c; letter-spacing: .3px; }
+.card-head-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.card-info { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px 12px; padding: 12px 0; }
+.info-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.info-label { font-size: 11px; color: #909399; }
+.info-value { font-size: 13px; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.info-remark { grid-column: 1 / -1; }
+/* 链路条分两组 */
+.track-groups { display: flex; flex-direction: column; gap: 10px; }
+.track-group { border-top: 1px dashed #ebeef5; padding-top: 8px; }
+.track-group-title { margin-bottom: 6px; }
+.track-group-badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
+.track-group-badge.freight { background: #ecf5ff; color: #409eff; }
+.track-group-badge.logistic { background: #f0f9eb; color: #67c23a; }
+/* 链路条：上方日期、下方状态 */
+.track-bar { display: flex; align-items: stretch; }
+.track-node { flex: 1; min-width: 0; text-align: center; }
+.track-date { font-size: 11px; color: #c0c4cc; height: 18px; white-space: nowrap; }
+.track-node.reached .track-date { color: #409eff; font-weight: 500; }
+.track-line { position: relative; height: 16px; display: flex; align-items: center; justify-content: center; }
+.track-line::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 2px; background: #e4e7ed; transform: translateY(-50%); }
+.track-node:first-child .track-line::before { left: 50%; }
+.track-node:last-child .track-line::before { right: 50%; }
+.track-node.reached .track-line::before { background: #409eff; }
+.track-dot { position: relative; z-index: 1; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2px solid #dcdfe6; }
+.track-node.reached .track-dot { background: #409eff; border-color: #409eff; box-shadow: 0 0 0 3px #d9ecff; }
+.track-label { font-size: 11px; color: #c0c4cc; padding-top: 4px; white-space: nowrap; }
+.track-node.reached .track-label { color: #606266; }
+/* 计划节点（isEsti=Y）：灰色虚线 + 灰点，区别于已完成（isEsti=N，蓝色） */
+.track-node.estimated.reached .track-date { color: #909399; font-weight: 400; }
+.track-node.estimated.reached .track-line::before { background: repeating-linear-gradient(90deg, #c0c4cc 0, #c0c4cc 4px, transparent 4px, transparent 7px); }
+.track-node.estimated.reached .track-dot { background: #c0c4cc; border-color: #c0c4cc; box-shadow: 0 0 0 3px #f4f4f5; }
+.track-node.estimated.reached .track-label { color: #a8abb2; }
+.plan-mark { margin-left: 3px; font-size: 10px; color: #909399; }
+/* 物流链路条显示日期+时间，字号稍小避免拥挤 */
+.logistic-group .track-date { font-size: 10px; letter-spacing: -0.2px; }
+
+/* 看板深色主题 */
+.dashboard { background: #0f1b2d; min-height: 100%; padding: 20px; color: #e0e6ed; }
+.dashboard-title { font-size: 20px; font-weight: 600; color: #fff; margin-bottom: 20px; }
+.stat-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 16px; }
+.stat-card {
+  background: #16253b;
+  border: 1px solid #22334d;
+  border-radius: 10px;
+  padding: 18px;
+}
+.stat-card .label { font-size: 13px; color: #8fa3bd; }
+.stat-card .value { font-size: 30px; font-weight: 600; color: #fff; margin: 8px 0; }
+.stat-card .sub { font-size: 12px; color: #7a8ca5; }
+.stat-card .up { color: #f56c6c; }
+.stat-card .down { color: #67c23a; }
+.dash-row { display: grid; gap: 16px; margin-bottom: 16px; }
+.dash-row.two { grid-template-columns: 2fr 1fr; }
+.dash-row.two-eq { grid-template-columns: 1fr 1fr; }
+.dash-panel {
+  background: #16253b;
+  border: 1px solid #22334d;
+  border-radius: 10px;
+  padding: 18px;
+}
+.dash-panel h3 { font-size: 15px; font-weight: 500; color: #fff; margin-bottom: 16px; }
+.dash-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dash-table th { text-align: left; color: #8fa3bd; font-weight: 400; padding: 8px 6px; border-bottom: 1px solid #22334d; }
+.dash-table td { padding: 9px 6px; border-bottom: 1px solid #1c2c44; color: #d0d9e4; }
+.tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+.tag-transit { background: #1a3a5c; color: #79bbff; }
+.tag-delay { background: #4a2a1a; color: #f7a35c; }
+.tag-pickup { background: #3a2f1a; color: #e5c07b; }
+.tag-arrived { background: #1a3a2c; color: #67c23a; }
+.alert-item { padding: 10px 0; border-bottom: 1px solid #1c2c44; font-size: 13px; }
+.alert-item:last-child { border: none; }
+.alert-item .no { color: #79bbff; font-family: monospace; }
+.alert-item .desc { color: #8fa3bd; font-size: 12px; margin-top: 4px; }
+.chart-box { height: 260px; }
