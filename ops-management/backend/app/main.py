@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.core.config import settings
-from app.routers import auth, dict, containers, sync, dashboard
+from app.routers import auth, dict, containers, sync, dashboard, performance
 from app.services import freightower_service, logistics_service
 
 logging.basicConfig(
@@ -77,6 +77,7 @@ app.include_router(dict.router)
 app.include_router(containers.router)
 app.include_router(sync.router)
 app.include_router(dashboard.router)
+app.include_router(performance.router)
 
 
 @app.get("/health")

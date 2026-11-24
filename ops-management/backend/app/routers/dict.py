@@ -14,6 +14,16 @@ def _lang(accept_language: str | None) -> str:
     return accept_language or "zh-CN"
 
 
+@router.get("/common")
+def common_dicts(_: dict = Depends(get_current_user), accept_language: str | None = Header(None)):
+    return dict_service.get_common_dicts(_lang(accept_language))
+
+
+@router.get("/owners", response_model=list[DictItem])
+def owners(_: dict = Depends(get_current_user), accept_language: str | None = Header(None)):
+    return dict_service.get_owners(_lang(accept_language))
+
+
 @router.get("/brands", response_model=list[DictItem])
 def brands(_: dict = Depends(get_current_user), accept_language: str | None = Header(None)):
     return dict_service.get_brands(_lang(accept_language))

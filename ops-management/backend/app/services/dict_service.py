@@ -1,8 +1,9 @@
 """
-字典数据服务：品牌/货代/船公司/仓库/起运港/目的港 下拉
+字典数据服务：货主/品牌/货代/船公司/仓库/起运港/目的港 下拉
 统一返回 {value, label}，value 存库（fieldvalue / 品牌 note）
 品牌 value 用 note（MMS/DZL/XB），note 为空时回退 brandname，保证保存后仍是原来的品牌简称而非数字编码
 label 支持中英文：中文用 lookup（中文名），英文用 fieldvalue（code，拉丁字母标识）
+货主与品牌属于跨页面公共字典，get_common_dicts() 一次返回，供新页面统一复用。
 """
 from typing import List, Dict
 import time
@@ -44,6 +45,32 @@ def _label(code, name, lang: str) -> str:
     if _is_en(lang):
         return code_s
     return str(name or code_s)
+
+
+def get_owners(lang: str = "zh-CN") -> List[DictItem]:
+    """货主字典：value 用 ownerid，label 用 ownername（英文名称，中英文一致）"""
+    def load():
+        rows = fetch_all(
+            "SELECT ownerid AS Owner_ID, ownername AS Owner_Name "
+            "FROM iscemdmdb.bmowner ORDER BY ownerid"
+        )
+        return [
+            DictItem(
+                value=str(r["Owner_ID"]).strip(),
+                label=str(r.get("Owner_Name") or r["Owner_ID"]).strip(),
+            )
+            for r in rows
+            if r.get("Owner_ID")
+        ]
+    return _cached("owners", lang, load)
+
+
+def get_common_dicts(lang: str = "zh-CN") -> Dict[str, List[DictItem]]:
+    """跨页面公共字典：货主 + 品牌，新页面统一从这里加载"""
+    return {
+        "owners": get_owners(lang),
+        "brands": get_brands(lang),
+    }
 
 
 def get_brands(lang: str = "zh-CN") -> List[DictItem]:

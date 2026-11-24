@@ -31,6 +31,23 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
 
+    # WMS 数据库（绩效系数 westlake_WorkPrice 所在库）
+    WMS_DB_HOST: str = "80.238.234.89"
+    WMS_DB_PORT: int = 6883
+    WMS_DB_USER: str = "wms@roc#rocob"
+    WMS_DB_PASSWORD_B64: str = ""
+    WMS_DB_NAME: str = "iscewmsdb"
+    WMS_DB_CHARSET: str = "utf8mb4"
+
+    @property
+    def WMS_DB_PASSWORD(self) -> str:
+        if self.WMS_DB_PASSWORD_B64:
+            try:
+                return base64.b64decode(self.WMS_DB_PASSWORD_B64).decode()
+            except Exception:
+                pass
+        return ""
+
     @property
     def DB_PASSWORD(self) -> str:
         if self.DB_PASSWORD_B64:

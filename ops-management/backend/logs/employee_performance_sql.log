@@ -1,0 +1,168 @@
+=== 员工绩效 SQL 日志说明 ===
+优化前（日期条件在最外层）：默认两个月 COUNT 6.388s + PAGE 7.195s = 13.583s；加 W01 货主条件后 1.027s + 1.072s = 2.099s。
+优化后（日期条件下推到明细表）：默认两个月 COUNT 1.981s + PAGE 1.636s = 3.617s；加 W01 后 0.958s + 0.987s = 1.945s。
+下方为优化后实际执行的完整 SQL 与耗时。
+
+2026-11-24 11:49:23,570 INFO app.services.employee_performance_service: [员工绩效SQL][COUNT] 耗时=1.443s 参数=('2026-10-01', '2026-11-30', '2026-10-01', '2026-11-30')
+SELECT COUNT(*) AS n FROM (
+SELECT Work_Mode, `Month`, Owner_ID, Operator, cateid, Cate_Name,
+       Total_Operate_Qty, Total_Operate_Amcount,
+       Total_Operate_Fee1, Total_Operate_Fee2, Total_Operate_Fee3
+FROM (
+  SELECT 1 AS Work_Mode,
+         DATE_FORMAT(t1.operatedate, '%Y-%m') AS `Month`,
+         T1.Owner_ID, Operator, t1.cateid, t1.Cate_Name,
+         SUM(Pick_Qty) AS Total_Operate_Qty,
+         SUM(Price * Pick_Qty) AS Total_Operate_Amcount,
+         SUM(Price * Pick_Qty * NVL(price1, 0)) AS Total_Operate_Fee1,
+         SUM(Price * Pick_Qty * NVL(price2, 0)) AS Total_Operate_Fee2,
+         SUM(Price * Pick_Qty * NVL(price3, 0)) AS Total_Operate_Fee3
+  FROM (
+    SELECT CONCAT(T1.OwnerID, '', t1.ownerName) AS Owner_ID,
+           DATE(t2.operatedate) AS operatedate,
+           t1.sheetid AS Sheet_ID, t1.zoneno AS ZONE_NO,
+           t6.cateid, CONCAT(t6.cateid, ' ', t6.catename) AS Cate_Name,
+           t2.gdid AS Item_No, t2.gdname AS Item_Name, t2.skuunit AS Unit,
+           t2.scellno AS Location, t2.PackingQty,
+           t2.realqty AS Pick_Qty,
+           CONCAT(t2.operator, ' ', t4.username) AS Operator,
+           t3.adviceprice AS Price
+    FROM iscewmsdb.omoutstock t1
+    INNER JOIN iscewmsdb.omoutstocksitem t2
+      ON t1.entid = t2.entid AND t1.sheetid = t2.sheetid
+    LEFT JOIN v_goods t3 ON t2.gdid = t3.gdid AND t3.entid = '1'
+    LEFT JOIN user.account t4 ON t2.operator = t4.usercode
+    LEFT JOIN iscemdmdb.bmgoodsowner t5
+      ON t2.ownerid = t5.ownerid AND t2.gdid = t5.gdid
+    LEFT JOIN iscemdmdb.bmclassowner t6
+      ON t5.ownerid = t6.ownerid AND SUBSTR(t5.groupno, 1, 3) = t6.cateid
+    WHERE t1.sheettype IN ('9123000', '9123002', '9123003')
+      AND T2.FLAG = 13 AND t2.realqty > 0
+       AND t2.operatedate >= '2026-10-01' AND t2.operatedate < DATE_ADD('2026-11-30', INTERVAL 1 DAY)
+  ) T1
+  LEFT JOIN iscewmsdb.westlake_workprice t2
+    ON t1.CateID = t2.cateid AND t2.workmode = '1'
+  WHERE 1 = 1 
+  GROUP BY DATE_FORMAT(t1.operatedate, '%Y-%m'), T1.Owner_ID, Operator, t1.cateid
+
+  UNION ALL
+
+  SELECT 2 AS Work_Mode,
+         DATE_FORMAT(t1.operatedate, '%Y-%m') AS `Month`,
+         CONCAT(T1.Owner_ID, '', t1.owner_Name) AS Owner_ID,
+         Operator, t1.cateid, t1.Cate_Name,
+         SUM(Pick_Qty) AS Total_Operate_Qty,
+         SUM(Price * Pick_Qty) AS Total_Operate_Amcount,
+         SUM(Price * Pick_Qty * NVL(price1, 0)) AS Total_Operate_Fee1,
+         SUM(Price * Pick_Qty * NVL(price1, 0)) AS Total_Operate_Fee2,
+         SUM(Price * Pick_Qty * NVL(price3, 0)) AS Total_Operate_Fee3
+  FROM (
+    SELECT t1.ownerid AS Owner_ID, t1.ownername AS Owner_Name,
+           DATE(t1.CheckDate) AS operatedate,
+           t1.sheetid AS Sheet_ID,
+           t6.cateid, CONCAT(t6.cateid, ' ', t6.catename) AS Cate_Name,
+           t2.gdid AS Item_No, t2.gdname AS Item_Name, t2.skuunit AS Unit,
+           t2.scanqty AS Pick_Qty,
+           CONCAT(t1.editor, ' ', t4.username) AS Operator,
+           t3.adviceprice AS Price
+    FROM iscewmsdb.omscanpack t1
+    INNER JOIN iscewmsdb.omscanpackitem t2
+      ON t1.entid = t2.entid AND t1.sheetid = t2.sheetid
+    LEFT JOIN v_goods t3 ON t2.gdid = t3.gdid AND t3.entid = '1'
+    LEFT JOIN user.account t4 ON t1.editor = t4.usercode
+    LEFT JOIN iscemdmdb.bmgoodsowner t5
+      ON t2.ownerid = t5.ownerid AND t2.gdid = t5.gdid
+    LEFT JOIN iscemdmdb.bmclassowner t6
+      ON t5.ownerid = t6.ownerid AND SUBSTR(t5.groupno, 1, 3) = t6.cateid
+    WHERE T1.FLAG = 100
+       AND t1.CheckDate >= '2026-10-01' AND t1.CheckDate < DATE_ADD('2026-11-30', INTERVAL 1 DAY)
+  ) T1
+  LEFT JOIN iscewmsdb.westlake_workprice t2
+    ON t1.CateID = t2.cateid AND t2.workmode = '2'
+  WHERE 1 = 1 
+  GROUP BY DATE_FORMAT(t1.operatedate, '%Y-%m'), T1.Owner_ID, Operator, t1.cateid
+) T1
+WHERE 1 = 1 
+) T_COUNT
+2026-11-24 11:49:24,996 INFO app.services.employee_performance_service: [员工绩效SQL][PAGE] 耗时=1.425s 参数=('2026-10-01', '2026-11-30', '2026-10-01', '2026-11-30', 20, 0)
+SELECT * FROM (
+SELECT Work_Mode, `Month`, Owner_ID, Operator, cateid, Cate_Name,
+       Total_Operate_Qty, Total_Operate_Amcount,
+       Total_Operate_Fee1, Total_Operate_Fee2, Total_Operate_Fee3
+FROM (
+  SELECT 1 AS Work_Mode,
+         DATE_FORMAT(t1.operatedate, '%Y-%m') AS `Month`,
+         T1.Owner_ID, Operator, t1.cateid, t1.Cate_Name,
+         SUM(Pick_Qty) AS Total_Operate_Qty,
+         SUM(Price * Pick_Qty) AS Total_Operate_Amcount,
+         SUM(Price * Pick_Qty * NVL(price1, 0)) AS Total_Operate_Fee1,
+         SUM(Price * Pick_Qty * NVL(price2, 0)) AS Total_Operate_Fee2,
+         SUM(Price * Pick_Qty * NVL(price3, 0)) AS Total_Operate_Fee3
+  FROM (
+    SELECT CONCAT(T1.OwnerID, '', t1.ownerName) AS Owner_ID,
+           DATE(t2.operatedate) AS operatedate,
+           t1.sheetid AS Sheet_ID, t1.zoneno AS ZONE_NO,
+           t6.cateid, CONCAT(t6.cateid, ' ', t6.catename) AS Cate_Name,
+           t2.gdid AS Item_No, t2.gdname AS Item_Name, t2.skuunit AS Unit,
+           t2.scellno AS Location, t2.PackingQty,
+           t2.realqty AS Pick_Qty,
+           CONCAT(t2.operator, ' ', t4.username) AS Operator,
+           t3.adviceprice AS Price
+    FROM iscewmsdb.omoutstock t1
+    INNER JOIN iscewmsdb.omoutstocksitem t2
+      ON t1.entid = t2.entid AND t1.sheetid = t2.sheetid
+    LEFT JOIN v_goods t3 ON t2.gdid = t3.gdid AND t3.entid = '1'
+    LEFT JOIN user.account t4 ON t2.operator = t4.usercode
+    LEFT JOIN iscemdmdb.bmgoodsowner t5
+      ON t2.ownerid = t5.ownerid AND t2.gdid = t5.gdid
+    LEFT JOIN iscemdmdb.bmclassowner t6
+      ON t5.ownerid = t6.ownerid AND SUBSTR(t5.groupno, 1, 3) = t6.cateid
+    WHERE t1.sheettype IN ('9123000', '9123002', '9123003')
+      AND T2.FLAG = 13 AND t2.realqty > 0
+       AND t2.operatedate >= '2026-10-01' AND t2.operatedate < DATE_ADD('2026-11-30', INTERVAL 1 DAY)
+  ) T1
+  LEFT JOIN iscewmsdb.westlake_workprice t2
+    ON t1.CateID = t2.cateid AND t2.workmode = '1'
+  WHERE 1 = 1 
+  GROUP BY DATE_FORMAT(t1.operatedate, '%Y-%m'), T1.Owner_ID, Operator, t1.cateid
+
+  UNION ALL
+
+  SELECT 2 AS Work_Mode,
+         DATE_FORMAT(t1.operatedate, '%Y-%m') AS `Month`,
+         CONCAT(T1.Owner_ID, '', t1.owner_Name) AS Owner_ID,
+         Operator, t1.cateid, t1.Cate_Name,
+         SUM(Pick_Qty) AS Total_Operate_Qty,
+         SUM(Price * Pick_Qty) AS Total_Operate_Amcount,
+         SUM(Price * Pick_Qty * NVL(price1, 0)) AS Total_Operate_Fee1,
+         SUM(Price * Pick_Qty * NVL(price1, 0)) AS Total_Operate_Fee2,
+         SUM(Price * Pick_Qty * NVL(price3, 0)) AS Total_Operate_Fee3
+  FROM (
+    SELECT t1.ownerid AS Owner_ID, t1.ownername AS Owner_Name,
+           DATE(t1.CheckDate) AS operatedate,
+           t1.sheetid AS Sheet_ID,
+           t6.cateid, CONCAT(t6.cateid, ' ', t6.catename) AS Cate_Name,
+           t2.gdid AS Item_No, t2.gdname AS Item_Name, t2.skuunit AS Unit,
+           t2.scanqty AS Pick_Qty,
+           CONCAT(t1.editor, ' ', t4.username) AS Operator,
+           t3.adviceprice AS Price
+    FROM iscewmsdb.omscanpack t1
+    INNER JOIN iscewmsdb.omscanpackitem t2
+      ON t1.entid = t2.entid AND t1.sheetid = t2.sheetid
+    LEFT JOIN v_goods t3 ON t2.gdid = t3.gdid AND t3.entid = '1'
+    LEFT JOIN user.account t4 ON t1.editor = t4.usercode
+    LEFT JOIN iscemdmdb.bmgoodsowner t5
+      ON t2.ownerid = t5.ownerid AND t2.gdid = t5.gdid
+    LEFT JOIN iscemdmdb.bmclassowner t6
+      ON t5.ownerid = t6.ownerid AND SUBSTR(t5.groupno, 1, 3) = t6.cateid
+    WHERE T1.FLAG = 100
+       AND t1.CheckDate >= '2026-10-01' AND t1.CheckDate < DATE_ADD('2026-11-30', INTERVAL 1 DAY)
+  ) T1
+  LEFT JOIN iscewmsdb.westlake_workprice t2
+    ON t1.CateID = t2.cateid AND t2.workmode = '2'
+  WHERE 1 = 1 
+  GROUP BY DATE_FORMAT(t1.operatedate, '%Y-%m'), T1.Owner_ID, Operator, t1.cateid
+) T1
+WHERE 1 = 1 
+) T_PAGE ORDER BY `Month` DESC, cateid, Operator LIMIT 20 OFFSET 0
+2026-11-24 11:49:24,996 INFO root: === 查询完成 total=1208 rows=20 整体耗时=2.869s ===

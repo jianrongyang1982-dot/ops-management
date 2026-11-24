@@ -262,6 +262,7 @@ import Draggable from 'vuedraggable'
 import { Setting, Rank, List, Grid, Link, Goods, Box } from '@element-plus/icons-vue'
 import api from '../api'
 import { STATUS_KEY_MAP } from '../i18n'
+import { loadCommonDicts } from '../composables/useCommonDicts'
 
 const { t, locale } = useI18n()
 
@@ -526,12 +527,13 @@ onMounted(() => {
 watch(locale, () => { loadDict() })
 
 async function loadDict() {
-  const [b, f, s, w, pol, pod, c] = await Promise.all([
-    api.get('/dict/brands'), api.get('/dict/forwarders'), api.get('/dict/ship-companies'),
+  const [common, f, s, w, pol, pod, c] = await Promise.all([
+    loadCommonDicts(), api.get('/dict/forwarders'), api.get('/dict/ship-companies'),
     api.get('/dict/warehouses'), api.get('/dict/ports/pol'), api.get('/dict/ports/pod'),
     api.get('/dict/cargotypes'),
   ])
-  dict.brands = b; dict.forwarders = f; dict.shipCompanies = s
+  dict.brands = common.brands
+  dict.forwarders = f; dict.shipCompanies = s
   dict.warehouses = w; dict.pols = pol; dict.pods = pod; dict.cargotypes = c
 }
 

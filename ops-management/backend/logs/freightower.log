@@ -532,3 +532,37 @@
 2026-11-23 17:20:18,746 [INFO] LOGISTICS QUERY | container=CMAU5892809 brandid=1001 rows=1 elapsed=573ms
 2026-11-23 17:21:14,070 [INFO] LOGISTICS QUERY | container=CMAU5892809 brandid=1001 rows=1 elapsed=416ms
 2026-11-23 17:21:14,394 [INFO] LOGISTICS WRITEBACK | id=24 container=CMAU5892809 brand=MMS rows=1 records=1 fields={"acceptanceStartTime": "2026-11-18 08:49:43", "acceptanceCompleteTime": "2026-11-18 11:01:11", "orderCloseTime": "2026-11-19 10:03:44", "earliestShelfTime": "2026-11-18 10:34:19", "latestShelfTime": "2026-11-18 19:51:03", "billdate": "2026-10-08 00:00:00", "receiveflag": "100", "PutawayFlag": "100"}
+2026-11-23 17:55:11,774 [INFO] LOGISTICS QUERY | container=MSDU7511260 brandid=1001 rows=0 elapsed=206ms
+2026-11-23 17:55:11,774 [INFO] LOGISTICS WRITEBACK | id=4 container=MSDU7511260 brand=MMS rows=0 records=0 fields={}
+2026-11-23 17:56:10,270 [INFO] LOGISTICS QUERY | container=MSMU8144947 brandid=1002 rows=1 elapsed=267ms
+2026-11-23 17:56:10,350 [INFO] LOGISTICS WRITEBACK | id=74 container=MSMU8144947 brand=DZL rows=1 records=1 fields={"acceptanceStartTime": "2026-11-20 08:54:01", "acceptanceCompleteTime": "2026-11-20 13:39:15", "orderCloseTime": "2026-11-20 17:16:19", "earliestShelfTime": "2026-11-20 09:29:13", "latestShelfTime": "2026-11-20 16:41:49", "billdate": "2026-10-07 00:00:00", "receiveflag": "100", "PutawayFlag": "100"}
+2026-11-23 17:58:34,536 [INFO] LOGISTICS QUERY | container=FDCU0104556 brandid=1002 rows=0 elapsed=127ms
+2026-11-23 17:58:34,536 [INFO] LOGISTICS WRITEBACK | id=79 container=FDCU0104556 brand=DZL rows=0 records=0 fields={}
+2026-11-23 17:58:37,354 [INFO] LOGISTICS QUERY | container=OOLU8947683 brandid=1002 rows=0 elapsed=117ms
+2026-11-23 17:58:37,354 [INFO] LOGISTICS WRITEBACK | id=78 container=OOLU8947683 brand=DZL rows=0 records=0 fields={}
+2026-11-23 17:58:38,740 [INFO] TOKEN FAIL | elapsed=308ms | 请求异常：[WinError 10054] 远程主机强迫关闭了一个现有的连接。
+2026-11-23 17:58:38,804 [INFO] TOKEN FAIL | elapsed=61ms | 请求异常：Expecting value: line 1 column 1 (char 0)
+2026-11-23 17:58:40,903 [INFO] LOGISTICS QUERY | container=OOLU8911042 brandid=1002 rows=0 elapsed=115ms
+2026-11-23 17:58:40,904 [INFO] LOGISTICS WRITEBACK | id=77 container=OOLU8911042 brand=DZL rows=0 records=0 fields={}
+2026-11-23 17:58:41,807 [INFO] TOKEN FAIL | elapsed=69ms | 请求异常：Expecting value: line 1 column 1 (char 0)
+2026-11-23 17:58:41,874 [INFO] TOKEN FAIL | elapsed=66ms | 请求异常：Expecting value: line 1 column 1 (char 0)
+2026-11-23 17:58:43,845 [INFO] TOKEN FAIL | elapsed=64ms | 请求异常：Expecting value: line 1 column 1 (char 0)
+2026-11-23 17:58:43,917 [INFO] TOKEN FAIL | elapsed=71ms | 请求异常：Expecting value: line 1 column 1 (char 0)
+2026-11-23 17:58:44,789 [INFO] LOGISTICS QUERY | container=FCIU9802012 brandid=1002 rows=0 elapsed=112ms
+2026-11-23 17:58:44,789 [INFO] LOGISTICS WRITEBACK | id=76 container=FCIU9802012 brand=DZL rows=0 records=0 fields={}
+2026-11-23 17:58:46,601 [INFO] LOGISTICS QUERY | container=TIIU6025628 brandid=1002 rows=0 elapsed=106ms
+2026-11-23 17:58:46,601 [INFO] LOGISTICS WRITEBACK | id=75 container=TIIU6025628 brand=DZL rows=0 records=0 fields={}
+2026-11-23 17:58:47,402 [INFO] TOKEN FAIL | elapsed=65ms | 请求异常：[WinError 10054] 远程主机强迫关闭了一个现有的连接。
+2026-11-23 17:58:47,497 [INFO] TOKEN FAIL | elapsed=92ms | 请求异常：[WinError 10054] 远程主机强迫关闭了一个现有的连接。
+2026-11-23 17:58:48,750 [INFO] TOKEN FAIL | elapsed=64ms | 请求异常：Expecting value: line 1 column 1 (char 0)
+2026-11-23 17:58:48,834 [INFO] TOKEN FAIL | elapsed=83ms | 请求异常：[WinError 10054] 远程主机强迫关闭了一个现有的连接。
+2026-11-23 17:58:50,044 [INFO] LOGISTICS QUERY | container=MSMU8144947 brandid=1002 rows=1 elapsed=286ms
+2026-11-23 17:58:50,373 [INFO] LOGISTICS WRITEBACK | id=74 container=MSMU8144947 brand=DZL rows=1 records=0 fields={"acceptanceStartTime": "2026-11-20 08:54:01", "acceptanceCompleteTime": "2026-11-20 13:39:15", "orderCloseTime": "2026-11-20 17:16:19", "earliestShelfTime": "2026-11-20 09:29:13", "latestShelfTime": "2026-11-20 16:41:49", "billdate": "2026-10-07 00:00:00", "receiveflag": "100", "PutawayFlag": "100"}
+2026-11-23 17:58:53,227 [INFO] TOKEN FAIL | elapsed=69ms | 请求异常：Expecting value: line 1 column 1 (char 0)
+2026-11-23 17:58:53,289 [INFO] TOKEN FAIL | elapsed=62ms | 请求异常：Expecting value: line 1 column 1 (char 0)
+2026-11-23 17:58:55,022 [INFO] LOGISTICS QUERY | container=EGSU0369309 brandid=1002 rows=1 elapsed=135ms
+2026-11-23 17:58:55,354 [INFO] LOGISTICS WRITEBACK | id=72 container=EGSU0369309 brand=DZL rows=1 records=1 fields={"acceptanceStartTime": "2026-10-07 00:00:00", "billdate": "2026-10-07 00:00:00", "receiveflag": "0", "PutawayFlag": "0"}
+2026-11-23 17:58:59,177 [INFO] TOKEN FAIL | elapsed=64ms | 请求异常：[WinError 10054] 远程主机强迫关闭了一个现有的连接。
+2026-11-23 17:58:59,243 [INFO] TOKEN FAIL | elapsed=63ms | 请求异常：Expecting value: line 1 column 1 (char 0)
+2026-11-24 09:08:48,542 [INFO] TOKEN FAIL | elapsed=131ms | 请求异常：[WinError 10054] 远程主机强迫关闭了一个现有的连接。
+2026-11-24 09:08:48,607 [INFO] TOKEN FAIL | elapsed=62ms | 请求异常：[WinError 10054] 远程主机强迫关闭了一个现有的连接。

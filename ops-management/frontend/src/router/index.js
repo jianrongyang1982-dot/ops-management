@@ -3,6 +3,8 @@ import Login from '../views/Login.vue'
 import Home from '../views/Home.vue'
 import ContainerList from '../views/ContainerList.vue'
 import Dashboard from '../views/Dashboard.vue'
+import PerformanceCoefficient from '../views/PerformanceCoefficient.vue'
+import PerformanceEmployee from '../views/PerformanceEmployee.vue'
 
 const routes = [
   { path: '/login', name: 'Login', component: Login },
@@ -17,6 +19,8 @@ const routes = [
       { path: '', redirect: '/container/list' },
       { path: 'container/list', name: 'Container', component: ContainerList },
       { path: 'container/dashboard', name: 'Dashboard', component: Dashboard },
+      { path: 'performance/coefficients', name: 'PerformanceCoefficient', component: PerformanceCoefficient },
+      { path: 'performance/employee', name: 'PerformanceEmployee', component: PerformanceEmployee },
     ],
   },
 ]

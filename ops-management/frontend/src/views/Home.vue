@@ -5,7 +5,7 @@
       <div class="sidebar-menu">
         <el-menu
           :default-active="activeMenu"
-          :default-openeds="['container-group']"
+          :default-openeds="['container-group', 'performance-group']"
           router
           background-color="transparent"
           text-color="#c8d6e5"
@@ -20,6 +20,17 @@
             </el-menu-item>
             <el-menu-item index="/container/dashboard">
               <el-icon><DataBoard /></el-icon><span>{{ t('home.dashboard') }}</span>
+            </el-menu-item>
+          </el-sub-menu>
+          <el-sub-menu index="performance-group">
+            <template #title>
+              <el-icon><TrendCharts /></el-icon><span>{{ t('performance.group') }}</span>
+            </template>
+            <el-menu-item index="/performance/coefficients">
+              <el-icon><Setting /></el-icon><span>{{ t('performance.coefficient') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/performance/employee">
+              <el-icon><User /></el-icon><span>{{ t('performance.employee') }}</span>
             </el-menu-item>
           </el-sub-menu>
         </el-menu>
@@ -79,7 +90,12 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const activeMenu = computed(() => route.path)
-const pageTitle = computed(() => route.path.includes('dashboard') ? t('home.dashboard') : t('home.containerTracking'))
+const pageTitle = computed(() => {
+  if (route.path.includes('performance/coefficients')) return t('performance.coefficient')
+  if (route.path.includes('performance/employee')) return t('performance.employee')
+  if (route.path.includes('dashboard')) return t('home.dashboard')
+  return t('home.containerTracking')
+})
 const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
 const syncing = ref(false)
 
