@@ -5,6 +5,13 @@ import ContainerList from '../views/ContainerList.vue'
 import Dashboard from '../views/Dashboard.vue'
 import PerformanceCoefficient from '../views/PerformanceCoefficient.vue'
 import PerformanceEmployee from '../views/PerformanceEmployee.vue'
+import OtbDashboard from '../views/OtbDashboard.vue'
+import OtbCategory from '../views/OtbCategory.vue'
+import OtbBrand from '../views/OtbBrand.vue'
+import OtbBrandCategory from '../views/OtbBrandCategory.vue'
+import OtbReplenishment from '../views/OtbReplenishment.vue'
+import BuDefinition from '../views/BuDefinition.vue'
+import BuBrandRelation from '../views/BuBrandRelation.vue'
 
 const routes = [
   { path: '/login', name: 'Login', component: Login },
@@ -21,6 +28,13 @@ const routes = [
       { path: 'container/dashboard', name: 'Dashboard', component: Dashboard },
       { path: 'performance/coefficients', name: 'PerformanceCoefficient', component: PerformanceCoefficient },
       { path: 'performance/employee', name: 'PerformanceEmployee', component: PerformanceEmployee },
+      { path: 'otb/dashboard', name: 'OtbDashboard', component: OtbDashboard },
+      { path: 'otb/category', name: 'OtbCategory', component: OtbCategory },
+      { path: 'otb/brand', name: 'OtbBrand', component: OtbBrand },
+      { path: 'otb/brand-category', name: 'OtbBrandCategory', component: OtbBrandCategory },
+      { path: 'otb/replenishment', name: 'OtbReplenishment', component: OtbReplenishment },
+      { path: 'bu/definition', name: 'BuDefinition', component: BuDefinition },
+      { path: 'bu/brand', name: 'BuBrandRelation', component: BuBrandRelation },
     ],
   },
 ]

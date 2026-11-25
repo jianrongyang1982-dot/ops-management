@@ -1,17 +1,20 @@
 """
 运营管理系统 - FastAPI 主程序
 """
+import json
+import builtins
 import logging
 from contextlib import asynccontextmanager
+from urllib.parse import urlencode, parse_qsl
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.core.config import settings
-from app.routers import auth, dict, containers, sync, dashboard, performance
+from app.routers import auth, dict, containers, sync, dashboard, performance, otb, bu
 from app.services import freightower_service, logistics_service
 
 logging.basicConfig(
@@ -72,12 +75,63 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def expand_json_to_pairs(raw_query: bytes):
+    """解析原始 query string，把其中的 q=<JSON> 展开为普通键值对。
+
+    - 无 q 或 q 非合法 JSON 对象时返回 None（保持原样，向后兼容）
+    - 返回展开后的 pairs 列表（已丢弃 q 本身，保留其他参数）
+    """
+    pairs = parse_qsl(raw_query.decode("utf-8"), keep_blank_values=True)
+    q_values = [v for k, v in pairs if k == "q"]
+    if not q_values:
+        return None
+    try:
+        payload = json.loads(q_values[-1])
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(payload, builtins.dict):
+        return None
+    out = [(k, v) for k, v in pairs if k != "q"]
+    for k, v in payload.items():
+        if v is None:
+            continue
+        if isinstance(v, bool):
+            v = "true" if v else "false"
+        elif isinstance(v, (builtins.dict, list)):
+            v = json.dumps(v, ensure_ascii=False)
+        out.append((k, str(v)))
+    return out
+
+
+@app.middleware("http")
+async def expand_json_query(request: Request, call_next):
+    """把 GET 的 ?q={"a":1,"b":"x"} 打包参数展开为标准 query 参数。
+
+    前端统一把 GET 参数序列化到 q 中；此处在路由匹配前还原，
+    使所有既有 GET 接口签名零改动，同时兼容传统 ?a=1&b=x 调用。
+
+    注意：浏览器 GET 请求无法携带 body，因此以 query 中的 JSON 字符串
+    作为载体，语义上等同于 JSON 传参。
+    """
+    if request.method in ("GET", "DELETE"):
+        expanded = expand_json_to_pairs(request.scope.get("query_string", b""))
+        if expanded is not None:
+            request.scope["query_string"] = urlencode(expanded).encode("utf-8")
+            # 清除 Starlette 缓存的 query_params，确保下游读到新值
+            request.scope.pop("query_params", None)
+            request.__dict__.pop("_query_params", None)
+    return await call_next(request)
+
+
 app.include_router(auth.router)
 app.include_router(dict.router)
 app.include_router(containers.router)
 app.include_router(sync.router)
 app.include_router(dashboard.router)
 app.include_router(performance.router)
+app.include_router(otb.router)
+app.include_router(bu.router)
 
 
 @app.get("/health")

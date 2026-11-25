@@ -5,7 +5,7 @@
       <div class="sidebar-menu">
         <el-menu
           :default-active="activeMenu"
-          :default-openeds="['container-group', 'performance-group']"
+          :default-openeds="['container-group', 'performance-group', 'otb-group', 'bu-group']"
           router
           background-color="transparent"
           text-color="#c8d6e5"
@@ -31,6 +31,38 @@
             </el-menu-item>
             <el-menu-item index="/performance/employee">
               <el-icon><User /></el-icon><span>{{ t('performance.employee') }}</span>
+            </el-menu-item>
+          </el-sub-menu>
+          <el-sub-menu index="bu-group">
+            <el-menu-item index="/bu/definition">
+              <el-icon><Setting /></el-icon><span>{{ t('bu.definition') }}</span>
+            </el-menu-item>
+            <template #title>
+              <el-icon><OfficeBuilding /></el-icon><span>{{ t('bu.group') }}</span>
+            </template>
+            <el-menu-item index="/bu/brand">
+              <el-icon><Connection /></el-icon><span>{{ t('bu.brand') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/otb/brand-category">
+              <el-icon><Connection /></el-icon><span>{{ t('otb.brandCategory') }}</span>
+            </el-menu-item>
+
+          </el-sub-menu>
+          <el-sub-menu index="otb-group">
+            <template #title>
+              <el-icon><TrendCharts /></el-icon><span>{{ t('otb.group') }}</span>
+            </template>
+            <el-menu-item index="/otb/dashboard">
+              <el-icon><DataBoard /></el-icon><span>{{ t('otb.dashboard') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/otb/category">
+              <el-icon><Grid /></el-icon><span>{{ t('otb.category') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/otb/brand">
+              <el-icon><Shop /></el-icon><span>{{ t('otb.brand') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/otb/replenishment">
+              <el-icon><ShoppingCart /></el-icon><span>{{ t('otb.replenishment') }}</span>
             </el-menu-item>
           </el-sub-menu>
         </el-menu>
@@ -82,7 +114,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Goods, ArrowDown, Refresh, Document } from '@element-plus/icons-vue'
+import { Goods, ArrowDown, Refresh, Document, Grid, Shop, ShoppingCart, Connection, OfficeBuilding } from '@element-plus/icons-vue'
 import api from '../api'
 import { setLocale } from '../i18n'
 
@@ -93,6 +125,13 @@ const activeMenu = computed(() => route.path)
 const pageTitle = computed(() => {
   if (route.path.includes('performance/coefficients')) return t('performance.coefficient')
   if (route.path.includes('performance/employee')) return t('performance.employee')
+  if (route.path.includes('otb/dashboard')) return t('otb.dashboard')
+  if (route.path.includes('otb/category')) return t('otb.category')
+  if (route.path.includes('otb/brand-category')) return t('otb.brandCategory')
+  if (route.path.includes('otb/brand')) return t('otb.brand')
+  if (route.path.includes('otb/replenishment')) return t('otb.replenishment')
+  if (route.path.includes('bu/definition')) return t('bu.definition')
+  if (route.path.includes('bu/brand')) return t('bu.brand')
   if (route.path.includes('dashboard')) return t('home.dashboard')
   return t('home.containerTracking')
 })
