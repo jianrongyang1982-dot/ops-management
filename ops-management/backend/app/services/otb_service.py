@@ -583,6 +583,117 @@ def split_monthly_buy(total: Decimal, curve: List[Decimal]) -> List[float]:
     return [float(a) for a in amounts]
 
 
+# ---------------------------------------------------------------------------
+# 3d. 月度销售/采买曲线（独立菜单）
+#   全局曲线：sales_mix_config(v1)  —— 品类与品牌未单独设定时共用
+#   品牌曲线：brand_monthly_mix(v1) —— 品牌单独设定时覆盖全局
+# ---------------------------------------------------------------------------
+def curve_overview(fiscal_year: str = "FY2027") -> Dict[str, Any]:
+    """月度曲线总览：全局 12 个月 + 各品牌是否有独立曲线的覆盖统计"""
+    global_curve = monthly_mix_curve(fiscal_year)
+    global_rows = mix_list(fiscal_year, "v1")
+
+    brands = brand_list(fiscal_year, page=1, page_size=5000).get("items", [])
+    # 一次性取出所有品牌曲线，避免 N+1
+    curve_rows = db.fetch_all(
+        f"SELECT brand_id, month_seq, mix_pct FROM {T_BRAND_MIX} "
+        f"WHERE fiscal_year=%s AND version=%s ORDER BY brand_id, month_seq",
+        (fiscal_year, "v1"),
+    )
+    by_brand: Dict[int, Dict[int, Decimal]] = {}
+    for r in curve_rows:
+        by_brand.setdefault(int(r["brand_id"]), {})[int(r["month_seq"])] = D(r["mix_pct"])
+
+    brand_items = []
+    overridden = 0
+    for b in brands:
+        seqs = by_brand.get(int(b["id"]))
+        has_own = bool(seqs) and len(seqs) == 12
+        if has_own:
+            overridden += 1
+            curve = [seqs.get(i, D(0)) for i in range(1, 13)]
+        else:
+            curve = global_curve
+        brand_items.append({
+            "brand_id": b["id"],
+            "brand_name": b.get("brand_name"),
+            "sub_brand_id": b.get("sub_brand_id"),
+            "has_own_curve": has_own,
+            "curve": [float(q4(c)) for c in curve],
+        })
+
+    return {
+        "fiscal_year": fiscal_year,
+        "months": CALENDAR_MONTHS,
+        "global_curve": [float(q4(c)) for c in global_curve],
+        "global_is_default": len(global_rows) != 12,
+        "global_total": float(q4(sum(global_curve))),
+        "brand_count": len(brand_items),
+        "brand_overridden": overridden,
+        "brands": brand_items,
+    }
+
+
+def global_curve_set(fiscal_year: str, items: List[Dict[str, Any]],
+                     user: str = DEFAULT_USER) -> Dict[str, Any]:
+    """保存全局 12 个月曲线（委派 mix_save，保持唯一数据源）"""
+    if len(items) != 12:
+        raise ValueError("必须提交 12 个月的曲线值")
+    return mix_save(fiscal_year, items, "v1", user)
+
+
+def brand_curve_batch_set(fiscal_year: str, items: List[Dict[str, Any]],
+                          user: str = DEFAULT_USER) -> Dict[str, Any]:
+    """批量保存多个品牌的月度曲线。items: [{brand_id, curve:[12个小数]}]
+
+    curve 为空或 None 表示清除该品牌独立曲线（回退全局曲线）。
+    """
+    saved, cleared = 0, 0
+    with db.transaction() as conn:
+        with conn.cursor() as cur:
+            for it in items:
+                brand_id = it.get("brand_id")
+                if not brand_id:
+                    continue
+                curve = it.get("curve")
+                if not curve:
+                    cur.execute(
+                        f"DELETE FROM {T_BRAND_MIX} WHERE brand_id=%s AND fiscal_year=%s AND version=%s",
+                        (brand_id, fiscal_year, "v1"),
+                    )
+                    cur.execute(
+                        f"UPDATE {T_BRAND} SET monthly_mix_version=NULL, modifier=%s WHERE id=%s",
+                        (user, brand_id),
+                    )
+                    cleared += 1
+                    continue
+                if len(curve) != 12:
+                    raise ValueError(f"品牌 {brand_id} 曲线必须为 12 个月")
+                total = sum(D(c) for c in curve)
+                if abs(float(total) - 1.0) > 0.005:
+                    raise ValueError(
+                        f"品牌 {brand_id} 曲线合计必须为 100%，当前为 {float(total) * 100:.2f}%"
+                    )
+                cur.execute(
+                    f"DELETE FROM {T_BRAND_MIX} WHERE brand_id=%s AND fiscal_year=%s AND version=%s",
+                    (brand_id, fiscal_year, "v1"),
+                )
+                for seq in range(1, 13):
+                    cur.execute(
+                        f"INSERT INTO {T_BRAND_MIX} "
+                        f"(brand_id, fiscal_year, month_seq, mix_pct, source, version, creator, modifier) "
+                        f"VALUES (%s,%s,%s,%s,'brand_override',%s,%s,%s)",
+                        (brand_id, fiscal_year, seq, float(D(curve[seq - 1])), "v1", user, user),
+                    )
+                cur.execute(
+                    f"UPDATE {T_BRAND} SET monthly_mix_version=%s, modifier=%s WHERE id=%s",
+                    ("v1", user, brand_id),
+                )
+                saved += 1
+    return {"fiscal_year": fiscal_year, "saved": saved, "cleared": cleared}
+
+
+
 def category_upsert(payload: Dict[str, Any], user: str = DEFAULT_USER) -> Dict[str, Any]:
     fy = payload.get("fiscal_year")
     code = payload.get("category_code")
@@ -1553,6 +1664,355 @@ def replenishment_decision(row_id: int, status: str, user: str = DEFAULT_USER) -
         raise ValueError("status 必须为 已确认/已采纳/已否决")
     db.execute(f"UPDATE {T_REPLEN} SET status=%s, modifier=%s WHERE id=%s", (status, user, row_id))
     return row_out(db.fetch_one(f"SELECT * FROM {T_REPLEN} WHERE id=%s", (row_id,)))
+
+
+# ---------------------------------------------------------------------------
+# 6a. 商品订货补货（实时取主数据，左子品牌 / 右商品明细）
+#   商品来源：mdmgoodsdb.goods.greenlabel = 子品牌编码
+#   库存来源：sync_stkdb.shopstock + mdmbasedb.shop（UAE 仓库 / 门店分列）
+#   销量来源：sync_somdb.sellhead + selldetail，按年星期聚合
+#   商品 Sale Mix：bidb.item_plan.sale_mix_pct（人工设定，商品在子品牌内的销售占比）
+# ---------------------------------------------------------------------------
+T_GOODS = "mdmgoodsdb.goods"
+T_SHOPSTOCK = "sync_stkdb.shopstock"
+T_SHOP = "mdmbasedb.shop"
+T_SELLHEAD = "sync_somdb.sellhead"
+T_SELLDETAIL = "sync_somdb.selldetail"
+
+
+def _sub_brand_brand_map() -> Dict[str, str]:
+    """子品牌编码 -> 主品牌编码（1xxx 0/1 位），用于库存/销量按门店品牌过滤"""
+    return {}
+
+
+def sub_brand_browse(fiscal_year: str = "FY2027", keyword: str = None,
+                     bu_code: str = None, page: int = 1, page_size: int = 200) -> Dict[str, Any]:
+    """左侧子品牌列表：编码 + 名称 + 商品数 + 品牌零售/采买计划额
+
+    商品数与扫码量都从主数据实时统计，保证左侧列表能反映真实商品覆盖。
+    """
+    # 1. 子品牌字典
+    children = brandchild_options()
+    # 2. 每个子品牌的商品数（一次聚合，避免 N+1）
+    count_rows = db.fetch_all(
+        f"SELECT greenlabel, COUNT(*) AS n FROM {T_GOODS} "
+        f"WHERE dbsplitcode='1' AND greenlabel IS NOT NULL AND greenlabel<>'' "
+        f"GROUP BY greenlabel"
+    )
+    goods_count = {str(r["greenlabel"]).strip(): int(r["n"] or 0) for r in count_rows}
+
+    # 3. 品牌汇总（FC 计划金额 + Sale Mix）
+    brand_rows = db.fetch_all(
+        f"SELECT id, brand_name, sub_brand_id, sale_mix_pct, fc_sales_plan, fc_buy_plan "
+        f"FROM {T_BRAND} WHERE fiscal_year=%s",
+        (fiscal_year,),
+    )
+    by_sub_id = {}
+    by_name = {}
+    for b in brand_rows:
+        sid = str(b.get("sub_brand_id") or "").strip()
+        if sid:
+            by_sub_id[sid] = b
+        by_name[_name_key(b.get("brand_name"))] = b
+
+    items: List[Dict[str, Any]] = []
+    for c in children:
+        sid = c["sub_brand_id"]
+        hit = by_sub_id.get(sid) or by_name.get(_name_key(c["sub_brand_name"]))
+        items.append({
+            "sub_brand_id": sid,
+            "sub_brand_name": c["sub_brand_name"],
+            "item_count": goods_count.get(sid, 0),
+            "brand_summary_id": hit["id"] if hit else None,
+            "sale_mix_pct": float(D(hit["sale_mix_pct"])) if hit else 0.0,
+            "fc_sales_plan": float(D(hit["fc_sales_plan"])) if hit else 0.0,
+            "fc_buy_plan": float(D(hit["fc_buy_plan"])) if hit else 0.0,
+        })
+
+    # 4. 过滤
+    if keyword:
+        kw = str(keyword).strip().upper()
+        items = [i for i in items
+                 if kw in str(i["sub_brand_id"]).upper() or kw in str(i["sub_brand_name"]).upper()]
+    if bu_code:
+        rel = db.fetch_all(
+            f"SELECT brand_name FROM {T_BU_BRAND} WHERE bu_code=%s", (bu_code,)
+        )
+        allowed = {_name_key(r["brand_name"]) for r in rel}
+        if allowed:
+            items = [i for i in items if _name_key(i["sub_brand_name"]) in allowed]
+
+    # 仅展示有商品的子品牌优先，但保留全部（业务需要看到无商品子品牌）
+    items.sort(key=lambda x: (-int(x["item_count"] or 0), str(x["sub_brand_id"])))
+
+    total = len(items)
+    start = max(0, (page - 1) * page_size)
+    return {
+        "fiscal_year": fiscal_year,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": items[start:start + page_size],
+    }
+
+
+def _item_sale_mix_map(fiscal_year: str, item_codes: List[str]) -> Dict[str, float]:
+    """读取商品 Sale Mix%（item_plan，按财年）。item_plan 无 fiscal_year 字段，按 item_code 取。"""
+    if not item_codes:
+        return {}
+    out: Dict[str, float] = {}
+    chunk = 500
+    for i in range(0, len(item_codes), chunk):
+        part = item_codes[i:i + chunk]
+        ph = ", ".join(["%s"] * len(part))
+        rows = db.fetch_all(
+            f"SELECT item_code, sale_mix_pct FROM {T_ITEM} WHERE item_code IN ({ph})",
+            tuple(part),
+        )
+        for r in rows:
+            if r.get("sale_mix_pct") is not None:
+                out[str(r["item_code"])] = float(D(r["sale_mix_pct"]))
+    return out
+
+
+def _stock_map(item_codes: List[str], brand_code: str) -> Dict[str, Dict[str, Any]]:
+    """按商品汇总库存：UAE 仓库(ShopType=22,PlaceId=000000) / UAE 门店(ShopType=11,PlaceId=000000) / 合计"""
+    if not item_codes:
+        return {}
+    out: Dict[str, Dict[str, Any]] = {}
+    chunk = 800
+    for i in range(0, len(item_codes), chunk):
+        part = item_codes[i:i + chunk]
+        ph = ", ".join(["%s"] * len(part))
+        sql = (
+            f"SELECT t1.GdId, "
+            f"SUM(CASE WHEN t2.ShopType='22' AND t1.PlaceId='000000' THEN t1.Qty ELSE 0 END) AS uae_wh, "
+            f"SUM(CASE WHEN t2.ShopType='11' AND t1.PlaceId='000000' THEN t1.Qty ELSE 0 END) AS uae_store, "
+            f"SUM(t1.Qty) AS total_stock "
+            f"FROM {T_SHOPSTOCK} t1 "
+            f"INNER JOIN {T_SHOP} t2 ON t1.ShopId=t2.ShopId "
+            f"WHERE t2.Brand=%s AND t1.GdId IN ({ph}) "
+            f"GROUP BY t1.GdId"
+        )
+        for r in db.fetch_all(sql, (brand_code,) + tuple(part)):
+            out[str(r["GdId"])] = {
+                "uae_wh": int(D(r["uae_wh"])),
+                "uae_stores": int(D(r["uae_store"])),
+                "total_stock": int(D(r["total_stock"])),
+            }
+    return out
+
+
+def _sales_map(item_codes: List[str], brand_code: str, year_from: str, year_to: str) -> Dict[str, Dict[str, Any]]:
+    """按商品汇总年销量 + 周销量明细：返回 {gdid: {barcode, sell_qty, weekly:[{week_seq,sales_qty}]}}"""
+    if not item_codes:
+        return {}
+    out: Dict[str, Dict[str, Any]] = {}
+    chunk = 800
+    for i in range(0, len(item_codes), chunk):
+        part = item_codes[i:i + chunk]
+        ph = ", ".join(["%s"] * len(part))
+        sql = (
+            f"SELECT YEARWEEK(t1.SaleDate,1) AS sale_week, t2.GdId, "
+            f"MAX(t2.Barcode) AS barcode, "
+            f"SUM(CASE WHEN t1.SaleType IN ('1','G') THEN t2.Qty ELSE -t2.Qty END) AS sell_qty "
+            f"FROM {T_SELLHEAD} t1 "
+            f"INNER JOIN {T_SELLDETAIL} t2 ON t1.EntId=t2.EntId AND t1.SheetId=t2.SheetId "
+            f"AND t1.ChannelId=t2.ChannelId AND t1.ShopId=t2.ShopId "
+            f"INNER JOIN {T_SHOP} s ON t1.ShopId=s.ShopId "
+            f"INNER JOIN {T_GOODS} t4 ON t2.gdid=t4.gdid AND t4.dbsplitcode='1' "
+            f"WHERE s.Brand=%s AND t1.SaleDate>=%s AND t1.SaleDate<%s AND t2.GdId IN ({ph}) "
+            f"GROUP BY YEARWEEK(t1.SaleDate,1), t2.GdId"
+        )
+        params = (brand_code, year_from, year_to) + tuple(part)
+        for r in db.fetch_all(sql, params):
+            gd = str(r["GdId"])
+            entry = out.setdefault(gd, {"barcode": None, "sell_qty": 0.0, "weekly": []})
+            qty = float(D(r["sell_qty"]))
+            entry["sell_qty"] += qty
+            if r.get("barcode"):
+                entry["barcode"] = r["barcode"]
+            entry["weekly"].append({"week_seq": int(r["sale_week"]), "sales_qty": qty})
+    return out
+
+
+def sub_brand_items(sub_brand_id: str, fiscal_year: str = "FY2027",
+                    keyword: str = None, page: int = 1, page_size: int = 200) -> Dict[str, Any]:
+    """右侧商品明细。FC 计划 = 子品牌计划金额 × 商品 Sale Mix%。
+
+    商品 Sale Mix 来源优先级：
+      1) bidb.item_plan.sale_mix_pct（人工设定）
+      2) 未设定时按子品牌内商品平均分摊（1/商品数），保证 FC 计划可得
+    """
+    sid = str(sub_brand_id or "").strip()
+    if not sid:
+        raise ValueError("请先选择子品牌")
+
+    # 1. 商品主数据（实时）
+    where = "t.dbsplitcode='1' AND t.greenlabel=%s"
+    params: List[Any] = [sid]
+    if keyword:
+        kw = "%" + str(keyword).strip() + "%"
+        where += " AND (t.gdid LIKE %s OR t.gdname LIKE %s OR t.gdbarcode LIKE %s)"
+        params += [kw, kw, kw]
+    total = db.fetch_one(
+        f"SELECT COUNT(*) AS n FROM {T_GOODS} t WHERE {where}", tuple(params)
+    )["n"]
+    goods = db.fetch_all(
+        f"SELECT t.gdid, t.gdname, t.gdbarcode, t.brandid FROM {T_GOODS} t "
+        f"WHERE {where} ORDER BY t.gdid LIMIT %s OFFSET %s",
+        tuple(params) + (page_size, (page - 1) * page_size),
+    )
+    codes = [str(g["gdid"]) for g in goods]
+
+    # 2. 子品牌计划金额（来自品牌汇总）
+    brand = db.fetch_one(
+        f"SELECT id, brand_name, sale_mix_pct, fc_sales_plan, fc_buy_plan FROM {T_BRAND} "
+        f"WHERE fiscal_year=%s AND sub_brand_id=%s LIMIT 1",
+        (fiscal_year, sid),
+    )
+    if not brand:
+        child = next((c for c in brandchild_options() if c["sub_brand_id"] == sid), None)
+        if child:
+            brand = db.fetch_one(
+                f"SELECT id, brand_name, sale_mix_pct, fc_sales_plan, fc_buy_plan FROM {T_BRAND} "
+                f"WHERE fiscal_year=%s AND brand_name=%s LIMIT 1",
+                (fiscal_year, child["sub_brand_name"]),
+            )
+    brand_retail = float(D(brand["fc_sales_plan"])) if brand and brand.get("fc_sales_plan") is not None else 0.0
+    brand_buy = float(D(brand["fc_buy_plan"])) if brand and brand.get("fc_buy_plan") is not None else 0.0
+    plan_source = "brand_summary"
+
+    # 2.1 品牌汇总尚未计算时（fc_sales_plan 为 0），按 OTB 主参数 × 该子品牌 Sale Mix 实时派生
+    if brand_retail <= 0 and brand_buy <= 0:
+        header = db.fetch_one(
+            f"SELECT planned_sales_total_retail, otb_cost FROM {T_HEADER} "
+            f"WHERE fiscal_year=%s ORDER BY id DESC LIMIT 1",
+            (fiscal_year,),
+        )
+        sub_mix = D(brand["sale_mix_pct"]) if brand and brand.get("sale_mix_pct") is not None else D(0)
+        if header and sub_mix <= 0:
+            # 子品牌 Sale Mix 也未设定时，按子品牌总数均分（保证金额列可用）
+            n_brand = db.fetch_one(
+                f"SELECT COUNT(*) AS n FROM {T_BRAND} WHERE fiscal_year=%s", (fiscal_year,)
+            )["n"]
+            if n_brand:
+                sub_mix = q4(D(1) / D(int(n_brand)))
+                plan_source = "equal_split"
+        if header and sub_mix > 0:
+            brand_retail = float(q2(D(header["planned_sales_total_retail"] or 0) * sub_mix))
+            brand_buy = float(q2(D(header["otb_cost"] or 0) * sub_mix))
+            if plan_source == "brand_summary":
+                plan_source = "otb_header"
+
+    brand_code = str(goods[0]["brandid"]) if goods and goods[0].get("brandid") else "1005"
+
+    # 3. 商品 Sale Mix
+    stored_mix = _item_sale_mix_map(fiscal_year, codes)
+    # 子品牌内全部商品数（用于分摊兜底，不只当前页）
+    all_count = total or len(codes)
+    default_mix = round(1.0 / all_count, 6) if all_count else 0.0
+
+    # 4. 库存 / 销量（仅当前页，减少查询量）
+    stock = _stock_map(codes, brand_code)
+    # 销量按自然年统计：FY2027 的 YTD 销速取 2026 年数据（财年对应的上一年度实际销量）
+    fy_year = int(fiscal_year.replace("FY", "") or 2027)
+    sale_year = fy_year - 1
+    sales = _sales_map(codes, brand_code, f"{sale_year}-01-01", f"{sale_year + 1}-01-01")
+
+    items: List[Dict[str, Any]] = []
+    for g in goods:
+        code = str(g["gdid"])
+        mix = stored_mix.get(code)
+        mix_from_default = False
+        if mix is None:
+            mix = default_mix
+            mix_from_default = True
+        st = stock.get(code, {"uae_wh": 0, "uae_stores": 0, "total_stock": 0})
+        sl = sales.get(code, {"barcode": None, "sell_qty": 0.0, "weekly": []})
+        fc_retail = q2(D(str(brand_retail)) * D(str(mix)))
+        fc_cost = q2(D(str(brand_buy)) * D(str(mix)))
+
+        # ROS 用周销量平均；Spot Cover = 库存 / ROS；Propose = ROS*(Target-Spot)-InTransit
+        weekly = sl["weekly"]
+        ros = q2(D(str(sl["sell_qty"])) / 52) if sl["sell_qty"] else D(0)
+        spot = q2(D(st["total_stock"]) / ros) if ros > 0 else None
+        target = D("20")
+        in_transit = D(0)
+        if ros > 0 and spot is not None:
+            propose = int((ros * (target - spot) - in_transit).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        else:
+            propose = None
+        remarks = ("Ok to Order" if propose > 0 else "Not to Order") if propose is not None else "N/A"
+
+        items.append({
+            "item_code": code,
+            "product_name": g.get("gdname"),
+            "barcode": g.get("gdbarcode") or sl.get("barcode"),
+            "sale_mix_pct": float(q4(D(str(mix)))),
+            "mix_from_default": mix_from_default,
+            "fc_sales_plan_retail": float(fc_retail),
+            "fc_buy_plan_cost": float(fc_cost),
+            "uae_wh": st["uae_wh"],
+            "uae_stores": st["uae_stores"],
+            "total_stock": st["total_stock"],
+            "ytd_sell_qty": round(sl["sell_qty"], 2),
+            "ros_wk_ytd": float(ros),
+            "spot_week_cover": float(spot) if spot is not None else None,
+            "forecasted_wk_cover": float(target),
+            "stocks_in_transit": 0,
+            "propose_the_qty": propose,
+            "order_remarks": remarks,
+            "weekly": weekly,
+        })
+
+    return {
+        "sub_brand_id": sid,
+        "sub_brand_name": brand.get("brand_name") if brand else None,
+        "fiscal_year": fiscal_year,
+        "brand_code": brand_code,
+        "brand_retail": brand_retail,
+        "brand_buy": brand_buy,
+        "plan_source": plan_source,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": items,
+    }
+
+
+def item_sale_mix_save(items: List[Dict[str, Any]], fiscal_year: str = "FY2027",
+                       user: str = DEFAULT_USER) -> Dict[str, Any]:
+    """保存商品 Sale Mix%。同一子品牌下合计不得超过 100%。"""
+    if not items:
+        return {"updated": 0}
+    total = sum(D(str(i.get("sale_mix_pct"))) for i in items)
+    if float(total) > 1.005:
+        raise ValueError(f"商品 Sale Mix 合计不能超过 100%，当前为 {float(total) * 100:.2f}%")
+
+    updated = 0
+    with db.transaction() as conn:
+        with conn.cursor() as cur:
+            for i in items:
+                code = str(i.get("item_code") or "").strip()
+                if not code:
+                    continue
+                mix = float(D(str(i.get("sale_mix_pct"))))
+                cur.execute(f"SELECT id FROM {T_ITEM} WHERE item_code=%s", (code,))
+                row = cur.fetchone()
+                if row:
+                    cur.execute(
+                        f"UPDATE {T_ITEM} SET sale_mix_pct=%s, modifier=%s WHERE id=%s",
+                        (mix, user, row[0] if isinstance(row, (tuple, list)) else row.get("id")),
+                    )
+                else:
+                    cur.execute(
+                        f"INSERT INTO {T_ITEM} (item_code, sale_mix_pct, entid, dbsplitcode, "
+                        f"creator, modifier) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (code, mix, DEFAULT_ENTID, "1", user, user),
+                    )
+                updated += 1
+    return {"fiscal_year": fiscal_year, "updated": updated}
 
 
 # ---------------------------------------------------------------------------

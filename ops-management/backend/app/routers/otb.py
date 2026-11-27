@@ -134,6 +134,26 @@ class BrandCategoryItemIn(BaseModel):
     remark: Optional[str] = None
 
 
+class ItemMixItem(BaseModel):
+    item_code: str
+    sale_mix_pct: float
+
+
+class ItemMixBatchIn(BaseModel):
+    fiscal_year: str = "FY2027"
+    items: list[ItemMixItem] = []
+
+
+class BrandCurveItem(BaseModel):
+    brand_id: int
+    curve: Optional[list[float]] = None  # 长度 12；None/[] 表示清除，回退全局曲线
+
+
+class BrandCurveBatchIn(BaseModel):
+    fiscal_year: str = "FY2027"
+    items: list[BrandCurveItem] = []
+
+
 class BrandCategorySaveIn(BaseModel):
     brand_name: str
     brandid: Optional[str] = None
@@ -209,6 +229,37 @@ def save_mix(payload: MixIn, user: dict = Depends(get_current_user)):
     try:
         return svc.mix_save(payload.fiscal_year, [i.model_dump() for i in payload.items],
                             payload.version, user.get("usercode", "sys"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------- 月度曲线（独立菜单） ----------------
+@router.get("/curve")
+def curve_overview(fiscal_year: str = "FY2027", _: dict = Depends(get_current_user)):
+    """月度曲线总览：全局曲线 + 各品牌是否覆盖"""
+    return svc.curve_overview(fiscal_year)
+
+
+@router.put("/curve/global")
+def save_global_curve(payload: MixIn, user: dict = Depends(get_current_user)):
+    """保存全局 12 个月曲线（合计必须 100%）"""
+    try:
+        return svc.global_curve_set(payload.fiscal_year,
+                                    [i.model_dump() for i in payload.items],
+                                    user.get("usercode", "sys"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/curve/brands")
+def save_brand_curves(payload: BrandCurveBatchIn, user: dict = Depends(get_current_user)):
+    """批量保存品牌级曲线；curve 为空表示清除（回退全局曲线）"""
+    try:
+        return svc.brand_curve_batch_set(
+            payload.fiscal_year,
+            [{"brand_id": i.brand_id, "curve": i.curve} for i in payload.items],
+            user.get("usercode", "sys"),
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -374,6 +425,39 @@ def delete_brand_category(row_id: int, _: dict = Depends(get_current_user)):
 
 
 # ---------------- 商品 / 补货 ----------------
+@router.get("/sub-brands")
+def list_sub_brands(fiscal_year: str = "FY2027", keyword: Optional[str] = None,
+                    bu_code: Optional[str] = None,
+                    page: int = Query(1, ge=1), page_size: int = Query(500, ge=1, le=1000),
+                    _: dict = Depends(get_current_user)):
+    """补货页左侧：子品牌列表（编码 + 名称 + 商品数）"""
+    return svc.sub_brand_browse(fiscal_year, keyword, bu_code, page, page_size)
+
+
+@router.get("/sub-brands/{sub_brand_id}/items")
+def list_sub_brand_items(sub_brand_id: str, fiscal_year: str = "FY2027",
+                         keyword: Optional[str] = None,
+                         page: int = Query(1, ge=1), page_size: int = Query(200, ge=1, le=1000),
+                         _: dict = Depends(get_current_user)):
+    """补货页右侧：商品明细（含条码、Sale Mix、FC 计划、库存、销量、补货建议）"""
+    try:
+        return svc.sub_brand_items(sub_brand_id, fiscal_year, keyword, page, page_size)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/items/batch-sale-mix")
+def batch_item_sale_mix(payload: ItemMixBatchIn, user: dict = Depends(get_current_user)):
+    """批量保存商品 Sale Mix%（同一子品牌合计不得超过 100%）"""
+    try:
+        return svc.item_sale_mix_save(
+            [i.model_dump() for i in payload.items], payload.fiscal_year,
+            user.get("usercode", "sys"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/items")
 def list_items(brand_id: Optional[int] = None, keyword: Optional[str] = None,
                page: int = Query(1, ge=1), page_size: int = Query(100, ge=1, le=1000),

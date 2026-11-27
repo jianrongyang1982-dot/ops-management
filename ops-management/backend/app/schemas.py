@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field
 
 class LoginIn(BaseModel):
     usercode: str = Field(..., min_length=1, description="用户名")
-    password: str = Field(..., min_length=1, description="密码")
+    # 前端提交的是第一层哈希 sha256(usercode_password)，64 位十六进制；
+    # 后端同时兼容明文（服务端自行计算第一层），故不限制长度与格式。
+    password: str = Field(..., description="密码或其第一层 SHA-256 哈希")
 
 
 class LoginOut(BaseModel):
@@ -112,6 +114,10 @@ class ContainerOut(BaseModel):
     createtime: Optional[datetime] = None
     status: Optional[str] = None
     delay_days: Optional[int] = None
+
+
+class MessageOut(BaseModel):
+    message: str
 
 
 class PageResult(BaseModel):

@@ -12,7 +12,8 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   // 告知后端当前语言，便于返回对应语言的文案（状态/星期等）
-  config.headers['Accept-Language'] = currentLocale() === 'enUS' ? 'en-US' : 'zh-CN'
+  const lang = currentLocale()
+  config.headers['Accept-Language'] = lang === 'zhCN' ? 'zh-CN' : (lang === 'ar' ? 'ar' : 'en-US')
 
   // GET/DELETE 统一以 JSON 打包传参：params -> ?q={"a":1,"b":"x"}
   // 浏览器 GET 请求无法携带 body，故以 query 中的 JSON 字符串作为载体，
@@ -57,7 +58,10 @@ api.interceptors.response.use(
   (err) => {
     const status = err.response?.status
     const detail = err.response?.data?.detail
-    if (status === 401) {
+    const url = String(err.config?.url || '')
+    // 登录接口的 401 是"用户名或密码错误"，不能当成会话过期
+    const isLogin = url.includes('/auth/login')
+    if (status === 401 && !isLogin) {
       localStorage.removeItem('token')
       router.push('/login')
       ElMessage.error(i18n.global.t('home.sessionExpired'))

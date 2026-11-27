@@ -60,6 +60,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../api'
 import { setLocale } from '../i18n'
+import { stage1Hash } from '../utils/sha256'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -79,13 +80,18 @@ function switchLang(lang) {
 }
 
 async function handleLogin() {
-  if (!form.value.usercode || !form.value.password) {
+  const usercode = (form.value.usercode || '').trim()
+  const password = form.value.password || ''
+  if (!usercode || !password) {
     ElMessage.warning(t('login.required'))
     return
   }
   loading.value = true
   try {
-    const res = await api.post('/auth/login', form.value)
+    // 第一层哈希：sha256(usercode_password)，明文密码不出浏览器
+    // 后端再叠加 salt 算第二层，与 ucsdb.account.pwd 比对
+    const hash = await stage1Hash(usercode, password)
+    const res = await api.post('/auth/login', { usercode, password: hash })
     localStorage.setItem('token', res.access_token)
     localStorage.setItem('user', JSON.stringify({
       display_name: res.display_name,
